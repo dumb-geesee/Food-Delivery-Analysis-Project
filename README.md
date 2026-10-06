@@ -1,2 +1,304 @@
 # Food-Delivery-Analysis-Project
 I analysed a dataset consisting of conditions in which food deliveries takes place, and I added some of my insights over what is the problem and the solution i think might work.
+# Food Delivery Time Analysis
+
+What makes food deliveries slow, and what can be done about it? An analysis of 50,000 delivery orders using SQL (PostgreSQL) and Python (pandas, matplotlib, seaborn).
+
+**Short answer:** deliveries are slow because riders move slowly on the road. Heavy traffic is the biggest cause, bad weather adds to it, and vehicle type sets the baseline. The kitchen explains differences between cuisines, but it does not explain the delays caused by rush hour, weather, festivals or location.
+
+## Contents
+
+1. [Dataset](#dataset)
+2. [Tools and files](#tools-and-files)
+3. [Questions and findings](#questions-and-findings)
+4. [Ranking the factors](#ranking-the-factors)
+5. [Recommendations](#recommendations)
+7. [How to reproduce](#how-to-reproduce)
+
+## Dataset
+
+**Source:** Food_Delivery_Time_Prediction.csv
+**Size:** 50,000 orders, 24 columns. Each row is one delivery order.
+
+**What it covers:** order time and date, cuisine, order size, restaurant rating and load, pickup and dropoff zone, road distance, traffic level, weather, vehicle type, rider details, weekend and festival flags, preparation time and total delivery time (`Time_taken_min`).
+
+**Averages:** an order takes about 84 minutes in total, of which about 24 minutes is preparation.
+
+**Cleanliness:** 
+
+ #   Column                      Non-Null Count  Dtype  
+---  ------                      --------------  -----  
+ 0   Order_ID                    50000 non-null  str    
+ 1   Order_Date                  50000 non-null  str    
+ 2   Order_Hour                  50000 non-null  int64  
+ 3   Day_of_Week                 50000 non-null  str    
+ 4   Is_Weekend                  50000 non-null  int64  
+ 5   Is_Festival                 50000 non-null  int64  
+ 6   Weather                     50000 non-null  str    
+ 7   Pickup_Zone                 50000 non-null  str    
+ 8   Dropoff_Zone                50000 non-null  str    
+ 9   Vehicle_Type                50000 non-null  str    
+ 10  Rider_Experience_Years      50000 non-null  float64
+ 11  Rider_Rating                50000 non-null  float64
+ 12  Restaurant_Rating           50000 non-null  float64
+ 13  Cuisine_Type                50000 non-null  str    
+ 14  Order_Items                 50000 non-null  int64  
+ 15  Restaurant_Load             50000 non-null  str    
+ 16  Preparation_Time_Min        50000 non-null  int64  
+ 17  Road_Distance_km            50000 non-null  float64
+ 18  Delivery_Distance_Category  50000 non-null  str    
+ 19  Traffic_Level               50000 non-null  str    
+ 20  Number_of_Signals           50000 non-null  int64  
+ 21  Average_Speed_kmph          50000 non-null  float64
+ 22  Delivery_Priority           50000 non-null  str    
+ 23  Time_taken_min              50000 non-null  int64  
+
+
+Order_ID                      0
+Order_Date                    0
+Order_Hour                    0
+Day_of_Week                   0
+Is_Weekend                    0
+Is_Festival                   0
+Weather                       0
+Pickup_Zone                   0
+Dropoff_Zone                  0
+Vehicle_Type                  0
+Rider_Experience_Years        0
+Rider_Rating                  0
+Restaurant_Rating             0
+Cuisine_Type                  0
+Order_Items                   0
+Restaurant_Load               0
+Preparation_Time_Min          0
+Road_Distance_km              0
+Delivery_Distance_Category    0
+Traffic_Level                 0
+Number_of_Signals             0
+Average_Speed_kmph            0
+Delivery_Priority             0
+Time_taken_min                0
+dtype: int64
+
+
+
+![Data overview](images/data_overview.png)
+
+![Delivery time distribution](images/delivery_time_distribution.png)
+
+## Tools and files
+
+| Tool | Used for |
+|---|---|
+| PostgreSQL | first exploration, Q1 to Q20 in `sql/queries.sql` |
+| Python (pandas) | the same grouping and averaging, so the notebook runs from the CSV alone |
+| matplotlib, seaborn | all charts |
+
+**Why both SQL and Python?** The SQL was how I explored the data. Python reproduces the same results from the CSV so anyone can run it without setting up a database. For a 50,000-row file pandas can do everything SQL did. SQL becomes necessary when data sits in a database that is too large or too spread across tables to load as a CSV.
+
+```
+food-delivery-analysis/
+├── README.md
+├── data/             the CSV (or a link to it)
+├── sql/queries.sql   the SQL queries
+├── analysis.ipynb    the notebook with all charts
+└── images/           saved charts used in this README
+```
+
+## Questions and findings
+
+### 1. When do orders come in, and when are deliveries slow?
+
+Orders peak at dinner (18:00 to 20:00, about 25% of all orders) and at lunch (12:00 to 13:00, about 15%). Delivery time does not follow order volume. It spikes at 8 to 10 am and 6 to 9 pm.
+
+![Orders by hour](images/orders_by_hour.png)
+
+| | Off-peak hours | Rush hours (8 to 10, 18 to 21) |
+|---|---|---|
+| Average delivery time | about 81 min | about 87 to 89 min |
+| Orders in High or Severe traffic | about 2% | about 17% |
+| Average rider speed | about 33.3 km/h | about 29.7 km/h |
+| Average prep time | about 24 min | about 24 min |
+| Average distance | about 26 km | about 26 km |
+
+Prep time and distance are flat all day, so the kitchen and route length are not behind the rush-hour delays.
+
+![Prep time vs delivery time by hour](images/prep_vs_delivery_by_hour.png)
+
+### 2. Is it the time of day, or the traffic?
+
+**Traffic.** At the same traffic level, rush-hour orders are not slower than off-peak orders. Rush hour only matters because it brings heavy traffic: Low-traffic orders fall from about 83% of off-peak orders to about 41% in rush hour.
+
+| Traffic | Off-peak (min) | Rush hour (min) |
+|---|---|---|
+| Low | 77.1 | 74.6 |
+| Moderate | 96.7 | 90.1 |
+| High | 119.4 | 110.2 |
+| Severe | 135.4 (only 25 orders) | 134.4 |
+
+Going from Low to Severe traffic adds about 60 minutes and cuts rider speed from about 35 to about 15 km/h.
+
+![Delivery time by traffic](images/delivery_by_traffic.png)
+
+### 3. What does weather add?
+
+Weather has two effects, and they add up:
+
+1. **It creates traffic.** Rain and storm make High or Severe traffic about 7 times more likely (25 to 27% of orders vs about 3.5% in clear weather).
+2. **It slows riders directly.** At Low traffic, a storm still adds about 26 minutes (74 min in Clear, 100 in Storm). Fog adds 6 to 9 minutes with no extra traffic at all.
+
+| Weather | Avg delivery (min) | vs Clear |
+|---|---|---|
+| Clear | 77.3 | baseline |
+| Cloudy | 79.0 | +1.7 |
+| Fog | 84.2 | +6.9 |
+| Rain | 98.9 | +21.6 |
+| Storm | 114.5 | +37.2 |
+
+Best case is Clear with Low traffic (74 min). A Storm with High traffic is 131 min.
+
+![Delivery time by traffic and weather](images/delivery_traffic_weather.png)
+
+### 4. Which vehicle is fastest?
+
+**Bike, in every weather condition.** The ranking never changes.
+
+| Vehicle | Clear (min) | Storm (min) | Speed in Clear |
+|---|---|---|---|
+| Bike | 66 | 101 | 41.8 km/h |
+| Scooter | 75 | 113 | 33.6 km/h |
+| Electric Scooter | 82 | 124 | 29.8 km/h |
+| Bicycle | 124 | 156 | 15.9 km/h |
+
+Weather cuts every vehicle's speed by about the same share (about 29% in rain, about 41% in a storm), so no vehicle copes better with bad weather. Bike wins by starting faster. A Bike in a storm (101 min) still beats a Bicycle on a clear day (124 min).
+
+Average route length is about 26 km for every vehicle, so the comparison is fair.
+
+![Delivery time by vehicle and weather](images/vehicle_by_weather.png)
+
+### 5. Why are CBD pickups slow?
+
+Orders picked up in the CBD average 93.8 minutes, about 13 minutes more than other zones (77.9 to 83.3). The CBD has plenty of orders (10,997, about 22% of the total), so this is not a small-sample effect.
+
+![Delivery time by pickup zone](images/delivery_by_pickup_zone.png)
+
+**Where the order goes does not matter.** Every route that starts in the CBD takes about 94 minutes, whatever the dropoff zone.
+
+![Pickup vs dropoff zone heatmap](images/heatmap_pickup_dropoff.png)
+
+**Traffic is the main reason.** 26% of CBD orders ran in High or Severe traffic, against about 4% in every other zone, and rider speed was 28.4 km/h against about 32.7. At the same traffic level a CBD order takes about as long as an order from any other zone, so the zone matters because of the traffic in it.
+
+![Zone vs traffic heatmap](images/heatmap_zone_traffic.png)
+
+**Prep time adds a smaller part.** CBD orders average 26.4 minutes of prep against about 23 elsewhere. This is not because CBD kitchens are busier or orders larger. It is the cuisine mix: Biryani, North Indian and Pizza (the three slowest to prepare) are about 64% of CBD orders, against about 44% in Residential.
+
+![Zone vs cuisine heatmap](images/heatmap_zone_cuisine.png)
+
+My rough estimate of the split is about 11 minutes from traffic and about 3 from prep. These are estimates from the group averages, not a formal model.
+
+### 6. Does the cuisine matter?
+
+Yes, and it works through prep time. Biryani takes about 20 minutes longer to deliver than Cafe, and almost all of that is kitchen time. The time after prep is about 59 to 61 minutes for nearly every cuisine.
+
+| Cuisine | Prep (min) | Delivery (min) |
+|---|---|---|
+| Biryani | 34.2 | 93.6 |
+| North Indian | 29.9 | 89.7 |
+| Pizza | 26.2 | 86.6 |
+| Chinese | 24.0 | 85.0 |
+| South Indian | 21.6 | 80.9 |
+| Burger | 16.9 | 73.8 |
+| Cafe | 14.7 | 73.9 |
+| Desserts, Bakery | about 13 | see notebook |
+
+Order size (about 2.6 items) and trip length are the same across cuisines, so neither explains the gap.
+
+![Prep time and delivery time by cuisine](images/cuisine_prep_vs_rest.png)
+
+Two smaller kitchen effects, both intuitive:
+
+- Each extra item adds about 2 minutes of prep (a 7-item order takes about 12 minutes longer than a 1-item order).
+- A High restaurant load adds about 6 minutes of prep, the same for every cuisine.
+
+### 7. Weekends and festivals
+
+| | Delivery (min) | Prep (min) | High or Severe traffic |
+|---|---|---|---|
+| Weekday | 81.6 | 24.0 | 3% |
+| Weekend | 89.6 | 24.0 | 22% |
+| Normal day | 83.3 | 24.0 | 7% |
+| Festival | 95.3 | 24.1 | 33% |
+
+Weekend orders take about 8 minutes longer and festival orders about 12. Prep time is unchanged and heavy traffic is much more common on both, which fits the traffic explanation. I did not test this at equal traffic levels, so treat it as consistent with the traffic story, not proven.
+
+## Ranking the factors
+
+Approximate size of each effect on delivery time, from largest to smallest:
+
+| Factor | Effect |
+|---|---|
+| Traffic (Low to Severe) | about 60 min |
+| Vehicle (Bike vs Bicycle) | about 58 min |
+| Weather (Storm vs Clear) | about 37 min |
+| Cuisine (Biryani vs Bakery or Cafe) | about 20 min |
+| Order size (7 items vs 1) | about 12 min |
+| Festival | about 12 min (seems to be traffic) |
+| Weekend | about 8 min (seems to be traffic) |
+| Rush hour | about 6 to 8 min (it is traffic) |
+| Restaurant load (High vs Low) | about 6 min |
+| Rider experience | about 2 to 3 min (left out of the main analysis) |
+
+These effects overlap and are not simply additive across all factors, so use this as a rough ordering.
+
+## Things that confused me, and what I found
+
+**"The order peaks are at lunch, but the delivery time spikes are in the morning. They don't match."**
+They are not supposed to. One chart counts orders and the other measures delivery time. Delivery time depends on traffic and rider speed, not on how many orders there are, and the slow hours are the commute hours. Lunch is busy for restaurants but not for roads. Hour 10 is the slowest hour (89.3 min) with only 1,931 orders, while hour 13 is the busiest lunch hour (3,905 orders) at a normal 81.1 min. This is evidence that order volume is not the cause of the delays.
+
+**"Why is delivery time higher in the CBD?"**
+Mostly traffic (see section 5). The data cannot say why the CBD has more traffic. It only shows that CBD pickups run in heavier traffic.
+
+**"Is prep time the reason for slow deliveries or not?"**
+Both answers are true depending on the question. Prep time does not explain delays from rush hour, weather, festivals or zones, because it stayed flat in all of those comparisons. It does explain why some cuisines are slower than others.
+
+**"Why use SQL if I have to redo the queries in Python?"**
+For a single CSV I don't need to. In real work the data usually lives in a database that is too large or split across tables, so SQL is how you get and summarise it, and Python takes the result for charts or modelling.
+
+**"Is the vehicle comparison fair?"**
+I checked: average distance is about 26 km for every vehicle, so Bicycles are not slow just because they got longer trips.
+
+**"Why does the traffic heatmap make the CBD look cooler?"**
+My first version showed the share of Low traffic, so the darkest cells were the good ones. I changed it to show only Moderate, High and Severe, so dark means more heavy traffic.
+
+### Mistakes I made along the way
+
+- I first read the restaurant-load results from partial output and concluded load adds about 10 minutes. With the full data it is about 6, the same for every cuisine.
+- I first described "CBD restaurants taking longer to prepare". It is the cuisine mix, not slower kitchens.
+- The orders-per-day figures for festivals (130 vs 16) were misleading, because the festival flag is attached to orders and not to calendar days. I did not use them.
+
+## Caveats and limitations
+
+- **Association, not proof of cause.** These are patterns in the data. For example, traffic explains the CBD, weekend and festival gaps well, but I have not run a model that separates the effects.
+- **Small groups.** Some combinations have very few orders and should not be quoted: off-peak Severe traffic (25 orders), Fog with Severe traffic (4), Cloudy with Severe traffic (13), Clear with Severe traffic (35). The weather heatmap hides cells with under 50 orders.
+- **Averages hide spread.** I report mean delivery times. Some orders will be much faster or slower than the average.
+- **The patterns are unusually clean.** The effects are very regular (for example, restaurant load adds almost exactly the same time to every cuisine, and weather lines run almost parallel). The dataset may be simulated or synthetic, so I would not assume these numbers hold for a real delivery company without checking where the data came from.
+- **Weekend and festival gaps were not tested at equal traffic levels.**
+- **Rider experience:** riders with 8+ years are about 5 minutes faster than riders with 1 to 3 years, but about half of that is because they use Bikes more often. The traffic exposure was the same across groups. I left it out of the main findings as a small effect.
+- Numbers marked "my estimate" (the 11 + 3 minute split for the CBD) come from group averages and are rough.
+
+## Recommendations
+
+1. **Plan around traffic, not time of day.** Quote delivery times from traffic and weather conditions rather than fixed hourly windows.
+2. **Add buffers or rider incentives in rain and storms,** especially during rush hours, on weekends, on festivals and for CBD pickups, where heavy traffic is most likely.
+3. **Send Bikes first** to long routes, the CBD and bad-weather orders. Keep Bicycles to short trips.
+4. **Use cuisine-specific prep estimates.** Biryani needs about 20 minutes more than Cafe or Bakery, and this explains part of the CBD gap.
+5. **Next step:** build a model that predicts `Time_taken_min` from traffic, weather, vehicle, cuisine, order size and zone, and check whether it ranks the factors the same way as above.
+
+## How to reproduce
+
+1. Put the CSV in `data/` (or next to the notebook, and adjust the path in the first cell).
+2. Install the libraries: `pip install pandas matplotlib seaborn jupyterlab`
+3. Open `analysis.ipynb` and run all cells. Charts are saved to `images/`.
+4. The SQL queries in `sql/queries.sql` run against a PostgreSQL table named `food_delivery_orders`.
+
+The notebook uses the CSV's column names (for example `Time_taken_min`, `Traffic_Level`, `Pickup_Zone`), which are capitalised, unlike the lowercase names in the SQL table.
