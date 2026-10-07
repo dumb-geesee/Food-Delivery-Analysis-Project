@@ -17,6 +17,7 @@ What makes food deliveries slow, and what can be done about it? An analysis of 5
 ## Dataset
 
 **Source:** [Food_Delivery_Time_Prediction.csv](Food_Delivery_Time_Prediction.csv)
+
 **Size:** 50,000 orders, 24 columns. Each row is one delivery order.
 
 **What it covers:** order time and date, cuisine, order size, restaurant rating and load, pickup and dropoff zone, road distance, traffic level, weather, vehicle type, rider details, weekend and festival flags, preparation time and total delivery time (`Time_taken_min`).
@@ -25,7 +26,7 @@ What makes food deliveries slow, and what can be done about it? An analysis of 5
 
 **Cleanliness:** no missing values in any of the 24 columns and no duplicate rows, so no rows were dropped. Column types were checked with `df.info()`.
 
-These graphs give you an idea about the different data used in the analysis and how they are realted to the no of orders and delivery time. 
+These graphs give you an idea about the different data used in the analysis and how they are related to the no of orders and delivery time. 
 
 
 
@@ -54,7 +55,7 @@ food-delivery-analysis/
 └── images/           
 ```
 
-## Questions and findings
+## Key Findings
 
 ### 1. When do orders come in, and when are deliveries slow?
 
